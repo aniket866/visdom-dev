@@ -30,6 +30,22 @@ def test_create_workspace(client, make_user):
     ]
 
 
+def test_create_workspace_rejects_when_plan_limit_reached(client, make_user, make_workspace):
+    user = make_user()
+    existing_workspace = make_workspace(user)
+
+    response = client.post(
+        WORKSPACES,
+        json={"name": "Second workspace", "slug": "second-workspace"},
+        headers=user["headers"],
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Workspace limit reached for the Free plan (1 maximum)."
+    workspaces = client.get(WORKSPACES, headers=user["headers"]).json()
+    assert [workspace["id"] for workspace in workspaces] == [existing_workspace["id"]]
+
+
 def test_create_workspace_duplicate_slug(client, make_user):
     first_owner = make_user()
     second_owner = make_user()

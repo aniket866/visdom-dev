@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.billing import DEFAULT_TIER, get_plan
 from app.config import settings
 from app.dependencies import commit_or_conflict, get_current_user, get_db
 from app.email import build_share_link_url, send_workspace_invite_email
@@ -128,6 +129,23 @@ def create_workspace(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A workspace with this slug already exists.",
         )
+
+    plan = get_plan(current_user.tier or DEFAULT_TIER)
+    workspace_limit = plan["limits"]["workspaces"]
+    if workspace_limit is not None:
+        workspaces_used = (
+            db.query(Workspace.id)
+            .filter(Workspace.created_by == current_user.id)
+            .count()
+        )
+        if workspaces_used >= workspace_limit:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Workspace limit reached for the {plan['name']} plan "
+                    f"({workspace_limit} maximum)."
+                ),
+            )
 
     workspace = Workspace(name=workspace_in.name, slug=workspace_in.slug, created_by=current_user.id)
     db.add(workspace)
