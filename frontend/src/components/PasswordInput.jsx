@@ -19,6 +19,7 @@ const PasswordInput = ({ className = 'visdom-input', ...inputProps }) => {
         title={visible ? 'Hide password' : 'Show password'}
         aria-label={visible ? 'Hide password' : 'Show password'}
         aria-pressed={visible}
+        tabIndex={-1}
       >
         {visible ? <EyeOff size={14} /> : <Eye size={14} />}
       </button>

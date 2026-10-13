@@ -36,22 +36,28 @@ describe('PasswordInput', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('test_password_reveal_control_is_keyboard_accessible', async () => {
+  it('keeps the reveal button out of the tab order', () => {
+    render(<PasswordInput name="password" />);
+    expect(screen.getByRole('button')).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('toggles password visibility with Space and Enter when the reveal button is focused', async () => {
     const user = userEvent.setup();
     render(<PasswordInput name="password" />);
 
-    await user.tab();
-    await user.tab();
-
     const toggle = screen.getByRole('button', { name: 'Show password' });
+    toggle.focus();
     expect(toggle).toHaveFocus();
 
-    await user.keyboard('{Enter}');
+    await user.keyboard('{Space}');
     expect(field()).toHaveAttribute('type', 'text');
 
-    expect(screen.getByRole('button', { name: 'Hide password' })).toHaveFocus();
+    const hideToggle = screen.getByRole('button', { name: 'Hide password' });
+    expect(hideToggle).toHaveFocus();
+
     await user.keyboard('{Enter}');
     expect(field()).toHaveAttribute('type', 'password');
+    expect(screen.getByRole('button', { name: 'Show password' })).toHaveFocus();
   });
 
   it('passes props through to the input', async () => {
