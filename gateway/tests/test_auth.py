@@ -1,5 +1,15 @@
 # Copyright 2017-present, The Visdom Authors
+from datetime import timedelta
+
 from app.config import settings
+from app.security import create_refresh_token
+
+
+def assert_session_was_not_renewed(response):
+    for cookie in response.headers.get_list("set-cookie"):
+        name_value = cookie.split(";", 1)[0]
+        if name_value.startswith(("refresh_token=", "session_token=")):
+            assert name_value.endswith("="), cookie
 
 
 def test_register_user(client):
@@ -86,6 +96,42 @@ def test_refresh_token(client):
     data = refresh_response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
+
+
+def test_refresh_token_after_logout_is_rejected(client, make_user):
+    """Logging out revokes a refresh token even if it is replayed by hand."""
+    make_user(email="refresh-logout@example.com")
+    stolen_refresh_token = client.cookies.get("refresh_token")
+    assert stolen_refresh_token
+
+    logout_response = client.post("/api/v1/auth/logout")
+    assert logout_response.status_code == 200
+    client.cookies.clear()
+
+    refresh_response = client.post(
+        "/api/v1/auth/refresh",
+        headers={"Cookie": f"refresh_token={stolen_refresh_token}"},
+    )
+
+    assert refresh_response.status_code == 401
+    assert_session_was_not_renewed(refresh_response)
+
+
+def test_expired_refresh_token_is_rejected(client, make_user):
+    """An expired refresh cookie cannot renew the session."""
+    user = make_user(email="expired-refresh@example.com")
+    expired_refresh_token = create_refresh_token(
+        {"sub": user["id"], "tv": 0}, expires_delta=timedelta(seconds=-1)
+    )
+    client.cookies.clear()
+    client.cookies.set(
+        "refresh_token", expired_refresh_token, path="/api/v1/auth"
+    )
+
+    refresh_response = client.post("/api/v1/auth/refresh")
+
+    assert refresh_response.status_code == 401
+    assert_session_was_not_renewed(refresh_response)
 
 
 def test_logout_user(client):
@@ -334,3 +380,79 @@ def test_a_logout_whose_rollback_also_fails_still_clears_the_cookies(
     cleared = answer.headers.get_list("set-cookie")
     assert any(cookie.startswith("refresh_token=") for cookie in cleared)
     assert any(cookie.startswith("session_token=") for cookie in cleared)
+
+
+def test_register_leaves_last_login_unset(client, db_session):
+    """A fresh account has never logged in, so the column stays empty."""
+    from app.models import User
+
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": "never-logged-in@example.com", "password": "securepassword"},
+    )
+
+    record = (
+        db_session.query(User)
+        .filter(User.email == "never-logged-in@example.com")
+        .first()
+    )
+    assert record is not None
+    assert record.last_login_at is None
+
+
+def test_login_records_last_login(client, db_session):
+    """Signing in stamps the column the inactivity rules will read."""
+    from app.models import User
+
+    email = "stamped@example.com"
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": "securepassword"},
+    )
+    response = client.post(
+        "/api/v1/auth/login", data={"username": email, "password": "securepassword"}
+    )
+    assert response.status_code == 200
+
+    record = db_session.query(User).filter(User.email == email).first()
+    assert record.last_login_at is not None
+
+
+def test_failed_login_does_not_record_last_login(client, db_session):
+    """A wrong password must not look like activity on the account."""
+    from app.models import User
+
+    email = "wrong-password@example.com"
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": "securepassword"},
+    )
+    response = client.post(
+        "/api/v1/auth/login", data={"username": email, "password": "notthepassword"}
+    )
+    assert response.status_code == 401
+
+    record = db_session.query(User).filter(User.email == email).first()
+    assert record.last_login_at is None
+
+
+def test_later_login_moves_last_login_forward(client, db_session):
+    """Each sign-in replaces the previous stamp rather than keeping the first."""
+    from app.models import User
+
+    email = "moves-forward@example.com"
+    client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": "securepassword"},
+    )
+    client.post(
+        "/api/v1/auth/login", data={"username": email, "password": "securepassword"}
+    )
+    record = db_session.query(User).filter(User.email == email).first()
+    first = record.last_login_at
+
+    client.post(
+        "/api/v1/auth/login", data={"username": email, "password": "securepassword"}
+    )
+    db_session.refresh(record)
+    assert record.last_login_at >= first

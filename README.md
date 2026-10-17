@@ -30,8 +30,7 @@ This project is under active development. Milestone 1 and Milestone 2 (auth, wor
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 20+
+- Python 3.12 and Node.js 22, the versions in `.python-version` and `.nvmrc`
 - A running PostgreSQL instance (for local development against SQLite, see Testing below)
 
 ### Backend (gateway)
@@ -40,7 +39,7 @@ This project is under active development. Milestone 1 and Milestone 2 (auth, wor
 cd gateway
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt
 
 cp .env.example .env
 # edit .env: set DATABASE_URL to your local Postgres instance and a real JWT_SECRET
@@ -70,11 +69,22 @@ The gateway's test suite runs against an in-memory SQLite database, so no Postgr
 
 ```bash
 cd gateway
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt
 pytest tests/ -v
 ```
 
-The frontend does not yet have an automated test suite; `npm run build` is used as a compile-correctness check.
+
+The frontend includes an automated test suite using Vitest and React Testing Library.
+
+To run the frontend tests:
+
+```bash
+cd frontend
+npm install
+npm test
+```
+
+Use `npm run build` to check that the frontend builds successfully.
 
 ## Benchmarks
 

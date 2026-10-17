@@ -36,6 +36,7 @@ class UserResponse(UserBase):
     tier: str
     is_active: bool
     created_at: datetime.datetime
+    last_login_at: Optional[datetime.datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -50,6 +51,25 @@ class UsernameAvailabilityResponse(BaseModel):
 
 class GeneratedUsernameResponse(BaseModel):
     username: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr = Field(..., max_length=100)
+
+
+class PasswordResetRequested(BaseModel):
+    email_enabled: bool
+    support_contact: str
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=100)
+    new_password: str = Field(..., min_length=6, max_length=100)
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str = Field(..., min_length=1, max_length=200)
+    password: str = Field(..., min_length=6, max_length=100)
 
 
 # --- TOKEN SCHEMAS ---
@@ -111,6 +131,8 @@ class PlanLimits(BaseModel):
     workspaces: Optional[int] = None
     members: Optional[int] = None
     api_keys: Optional[int] = None
+    storage_mb: Optional[int] = None
+    workspace_storage_mb: Optional[int] = None
 
 
 class PlanResponse(BaseModel):
@@ -140,4 +162,4 @@ class SubscriptionResponse(BaseModel):
 
 
 class SubscriptionUpdate(BaseModel):
-    tier: Literal["free", "pro", "enterprise"]
+    tier: str = Field(..., min_length=1, max_length=40)
