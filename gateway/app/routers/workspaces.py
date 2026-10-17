@@ -163,7 +163,7 @@ def create_workspace(
             detail="A workspace with this slug already exists.",
         )
 
-    plan = get_plan(owner.tier or DEFAULT_TIER)
+    plan = get_plan(db, owner.tier or DEFAULT_TIER)
     workspace_limit = plan["limits"]["workspaces"]
     if workspace_limit is not None:
         workspaces_used = (
