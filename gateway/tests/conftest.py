@@ -85,6 +85,12 @@ def file_database_client(tmp_path):
     )
     Base.metadata.create_all(bind=file_engine)
     file_sessions = sessionmaker(autocommit=False, autoflush=False, bind=file_engine)
+    from app.billing import seed_default_plans
+    seed_session = file_sessions()
+    try:
+        seed_default_plans(seed_session)
+    finally:
+        seed_session.close()
 
     def override_get_db():
         db = file_sessions()
